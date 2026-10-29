@@ -1,556 +1,484 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Juego de Nim - Ramitas de Mora</title>
-    <!-- Tailwind CSS para el diseño responsive -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Fuentes de Google -->
-    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
-    <!-- Tone.js para la música generativa -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-    
-    <style>
-        body {
-            font-family: 'Lora', serif;
-            background-color: #f4ece1; /* Tono pergamino/madera rústica */
-            color: #3e2723; /* Marrón oscuro */
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            /* Optimizaciones para móvil: evitar zoom por doble toque y selección accidental */
-            touch-action: manipulation;
-            -webkit-user-select: none;
-            user-select: none;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Nim: Ramitas de Mora</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-        .game-container {
-            background-color: #e6dcc7;
-            border: 3px solid #8d6e63;
-            border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(93, 64, 55, 0.2);
-            width: 100%;
-            max-width: 800px;
-            /* Asegurar que no haya desbordamiento horizontal en pantallas muy estrechas */
-            overflow-x: hidden;
-        }
+    body {
+      margin: 0;
+      padding: 10px;
+      background-color: #f4eee0;
+      color: #3e2723;
+      font-family: 'Georgia', serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
 
-        /* Estilos visuales de la ramita interactiva */
-        .twig-wrapper {
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-            position: relative;
-            /* Quitar el resaltado azul por defecto de Android/iOS al tocar */
-            -webkit-tap-highlight-color: transparent;
-        }
+    .game-container {
+      background: #ebdccb;
+      border: 2px solid #8d6e63;
+      border-radius: 16px;
+      padding: 16px 12px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(62, 39, 35, 0.15);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
-        .game-container {
-            background-color: #e6dcc7;
-            border: 3px solid #8d6e63;
-            border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(93, 64, 55, 0.2);
-            width: 100%;
-            max-width: 800px;
-        }
+    h1 {
+      margin: 0 0 4px 0;
+      font-size: 1.3rem;
+      text-align: center;
+      color: #3e2723;
+    }
 
-        /* Estilos visuales de la ramita interactiva */
-        .twig-wrapper {
-            transition: all 0.2s ease-in-out;
-            cursor: pointer;
-            position: relative;
-        }
-        
-        .twig-wrapper:hover:not(.disabled) {
-            transform: scale(1.15) rotate(-3deg);
-            filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.2));
-        }
+    .rules {
+      font-size: 0.75rem;
+      text-align: center;
+      color: #5d4037;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
 
-        /* Cuando una ramita es seleccionada, se muestra tachada y opaca */
-        .selected-twig {
-            opacity: 0.6;
-        }
-        
-        .selected-twig::after {
-            content: "-";
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #00bcd4; /* Cyan brillante, complementario al fondo beige */
-            font-size: 3rem; /* Tamaño adaptado para móvil */
-            font-weight: 900;
-            font-family: sans-serif;
-            pointer-events: none;
-            text-shadow: 0 0 5px rgba(255, 255, 255, 0.9);
-        }
+    .status-msg {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #2e7d32;
+      min-height: 1.4em;
+      margin-bottom: 8px;
+      text-align: center;
+    }
 
-        @media (min-width: 640px) {
-            .selected-twig::after {
-                font-size: 4rem; /* Tamaño original para pantallas grandes */
-            }
-        }
+    /* Pirámide de ramitas */
+    .pyramid {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      width: 100%;
+      margin-bottom: 12px;
+    }
 
-        /* Estilo para las ramitas que ya fueron usadas/tachadas */
-        .used-twig {
-            filter: grayscale(100%) brightness(40%);
-            opacity: 0.4;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
+    .row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1px;
+      width: 100%;
+    }
 
-        .disabled {
-            cursor: not-allowed;
-            pointer-events: none;
-        }
+    .twig {
+      cursor: pointer;
+      width: 22px;
+      height: 36px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: transform 0.15s ease, filter 0.2s ease;
+    }
 
-        @keyframes pulse-turn {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        .turn-active {
-            animation: pulse-turn 2s infinite;
-        }
-    </style>
+    .twig svg {
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* Estado seleccionado: Rayita cyan horizontal */
+    .twig.selected svg .selection-line {
+      display: block !important;
+    }
+
+    /* Estado tachado/apagado */
+    .twig.taken {
+      cursor: default;
+      opacity: 0.25;
+      filter: grayscale(100%) brightness(40%);
+    }
+
+    .twig.taken svg .selection-line {
+      display: none !important;
+    }
+
+    /* Panel de Botones Compacto */
+    .controls {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-main {
+      width: 100%;
+      padding: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      font-weight: bold;
+      background-color: #a1887f;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+      transition: background 0.2s;
+    }
+
+    .btn-main:active {
+      background-color: #8d6e63;
+      transform: translateY(1px);
+    }
+
+    .btn-main:disabled {
+      background-color: #d7ccc8;
+      color: #a1887f;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Fila de controles secundarios (3 en línea) */
+    .sub-controls {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr 1fr;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .btn-sub, .select-sub {
+      width: 100%;
+      padding: 8px 4px;
+      font-size: 0.75rem;
+      font-family: inherit;
+      font-weight: bold;
+      background-color: #f5f0eb;
+      color: #4e342e;
+      border: 1px solid #bcaaa4;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .select-sub {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url('data:image/svg+xml;utf8,<svg fill="%234e342e" height="12" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 4px center;
+      padding-right: 14px;
+    }
+
+    .btn-sub:active, .select-sub:active {
+      background-color: #e0d7ce;
+    }
+  </style>
 </head>
-<body class="p-4 sm:p-8">
+<body>
 
-    <div class="game-container p-4 sm:p-8 flex flex-col items-center relative">
+<div class="game-container">
+  <h1>Nim: Ramitas de Mora</h1>
+  <div class="rules">
+    Tacha cualquier cantidad de ramitas en un solo renglón por turno.<br>
+    ¡Quien se quede con la última ramita <strong>pierde</strong>!
+  </div>
+
+  <div id="status" class="status-msg">Tu turno. Elige ramas a tachar.</div>
+
+  <div id="pyramid" class="pyramid"></div>
+
+  <div class="controls">
+    <button id="confirm-btn" class="btn-main" onclick="confirmMove()">Confirmar jugada</button>
+    
+    <div class="sub-controls">
+      <button class="btn-sub" onclick="resetGame()">🔄 Reiniciar</button>
+      
+      <select id="difficulty" class="select-sub" onchange="changeDifficulty(this.value)">
+        <option value="easy">🌱 Aprendiz</option>
+        <option value="medium">🌿 Sabio</option>
+        <option value="hard" selected>🌳 Leyenda</option>
+      </select>
+
+      <button id="music-btn" class="btn-sub" onclick="toggleMusic()">🎵 OFF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let gameState = [];
+  let selectedRow = -1;
+  let selectedIndices = [];
+  let isPlayerTurn = true;
+  let difficulty = 'hard';
+  let musicPlaying = false;
+  let synth, loop;
+
+  // SVG con DOS MORAS y ramita leñosa corregida
+  function createTwigSVG() {
+    return `
+      <svg viewBox="0 0 30 50" xmlns="http://www.w3.org/2000/svg">
+        <!-- Tallo leñoso -->
+        <path d="M 14,48 L 16,35 L 13,22 L 15,6" stroke="#3e2723" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M 15,48 L 17,35 L 14,22 L 16,6" stroke="#2d1c18" stroke-width="1" stroke-linecap="round" fill="none"/>
         
-        <!-- Cabecera -->
-        <h1 class="text-3xl sm:text-4xl font-bold mb-2 text-center text-[#4e342e]">Nim: Ramitas de Mora</h1>
-        <p class="text-xs sm:text-base text-center mb-4 max-w-lg text-[#5d4037] px-2">
-            <strong>Reglas:</strong> Selecciona y tacha cualquier cantidad de ramitas de <strong>un solo renglón</strong>. 
-            <br/>El jugador que se vea obligado a tomar la <strong>última ramita</strong> pierde el juego.
-        </p>
+        <!-- Espinas -->
+        <path d="M 16,38 L 22,35 L 17,33 Z" fill="#3e2723"/>
+        <path d="M 13,28 L 7,25 L 12,23 Z" fill="#3e2723"/>
 
-        <!-- Estado del turno -->
-        <div id="status-msg" class="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-center h-8 transition-colors duration-300">
-            Cargando juego...
-        </div>
+        <!-- Hoja verde -->
+        <path d="M 13,24 C 3,21 3,12 14,16 C 14,16 12,21 13,24 Z" fill="#2e7d32" stroke="#1b5e20" stroke-width="0.8"/>
+        <path d="M 13,24 Q 8,19 11,14" stroke="#81c784" stroke-width="0.5" fill="none"/>
 
-        <!-- Tablero / Pirámide -->
-        <div id="game-board" class="w-full flex flex-col items-center mb-4 sm:mb-6">
-            <!-- Las filas de ramitas se inyectarán aquí mediante JS -->
-        </div>
+        <!-- MORA SUPERIOR -->
+        <g transform="translate(15, 2)">
+          <circle cx="0" cy="0" r="2.2" fill="#211029"/>
+          <circle cx="-2" cy="2.5" r="2" fill="#311b92"/>
+          <circle cx="2" cy="2.5" r="2" fill="#1a237e"/>
+          <circle cx="0" cy="4.5" r="2.2" fill="#4a148c"/>
+          <circle cx="-1.5" cy="7" r="1.8" fill="#211029"/>
+          <circle cx="1.5" cy="7" r="1.8" fill="#311b92"/>
+          <circle cx="0" cy="9" r="1.5" fill="#1a237e"/>
+        </g>
 
-        <!-- Controles -->
-        <div class="flex flex-col sm:flex-row gap-3 w-full justify-center px-4 flex-wrap">
-            <button id="btn-confirm" onclick="confirmMove()" class="bg-[#5d4037] text-white px-8 py-4 sm:py-3 rounded-xl font-bold shadow-lg transition-all duration-200 opacity-50 cursor-not-allowed text-lg" disabled>
-                Confirmar jugada
-            </button>
-            <button onclick="initGame()" class="bg-transparent border-2 border-[#5d4037] text-[#5d4037] px-8 py-4 sm:py-3 rounded-xl font-bold shadow-sm hover:bg-[#5d4037] hover:text-white transition-all duration-200 text-lg">
-                Reiniciar
-            </button>
-            <select id="difficulty-select" class="bg-transparent border-2 border-[#5d4037] text-[#5d4037] px-4 py-4 sm:py-3 rounded-xl font-bold shadow-sm hover:bg-[#5d4037] hover:text-white focus:outline-none transition-all duration-200 text-lg cursor-pointer text-center">
-                <option value="aprendiz" class="bg-[#f4ece1] text-[#5d4037]">🌱 Aprendiz</option>
-                <option value="sabio" class="bg-[#f4ece1] text-[#5d4037]">🌿 Sabio</option>
-                <option value="leyenda" class="bg-[#f4ece1] text-[#5d4037]" selected>🌳 Leyenda</option>
-            </select>
-            <button id="btn-music" onclick="toggleMusic()" class="bg-transparent border-2 border-[#5d4037] text-[#5d4037] px-8 py-4 sm:py-3 rounded-xl font-bold shadow-sm hover:bg-[#5d4037] hover:text-white transition-all duration-200 text-lg">
-                🎵 Música: OFF
-            </button>
-        </div>
-    </div>
+        <!-- SEGUNDA MORA (Media altura) -->
+        <g transform="translate(19, 18)">
+          <path d="M -4,2 L 0,-1" stroke="#3e2723" stroke-width="1.2" fill="none"/>
+          <circle cx="0" cy="0" r="1.8" fill="#311b92"/>
+          <circle cx="-1.8" cy="2" r="1.6" fill="#211029"/>
+          <circle cx="1.8" cy="2" r="1.6" fill="#4a148c"/>
+          <circle cx="0" cy="3.5" r="1.8" fill="#1a237e"/>
+          <circle cx="-1.2" cy="5.5" r="1.4" fill="#311b92"/>
+          <circle cx="1.2" cy="5.5" r="1.4" fill="#211029"/>
+          <circle cx="0" cy="7" r="1.2" fill="#4a148c"/>
+        </g>
 
-    <!-- Modal de Fin de Juego -->
-    <div id="game-over-modal" class="hidden fixed inset-0 bg-[#3e2723] bg-opacity-80 z-50 justify-center items-center backdrop-blur-sm p-4">
-        <div class="bg-[#f4ece1] rounded-2xl p-8 max-w-md w-full text-center shadow-2xl border-4 border-[#8d6e63]">
-            <h2 id="modal-title" class="text-4xl font-bold text-[#4e342e] mb-4">...</h2>
-            <p id="modal-desc" class="text-lg text-[#5d4037] mb-8">...</p>
-            <button onclick="closeModalAndRestart()" class="bg-[#4caf50] hover:bg-[#2e7d32] text-white px-8 py-4 rounded-xl font-bold shadow-lg transition-all duration-200 transform hover:scale-105 text-xl">
-                Jugar otra vez
-            </button>
-        </div>
-    </div>
+        <!-- Rayita horizontal Cyan para selección -->
+        <line class="selection-line" x1="1" y1="25" x2="29" y2="25" stroke="#00bcd4" stroke-width="4.5" stroke-linecap="round" style="display:none;" />
+      </svg>
+    `;
+  }
 
-    <script>
-        const TOTAL_ROWS = 10;
-        let gameBoard = []; 
-        let currentSelection = { row: null, twigs: new Set() };
-        let isPlayerTurn = true;
-        let isGameOver = false;
+  function initBoard() {
+    gameState = [];
+    for (let r = 1; r <= 10; r++) {
+      gameState.push(r);
+    }
+    selectedRow = -1;
+    selectedIndices = [];
+    isPlayerTurn = true;
+    document.getElementById('confirm-btn').disabled = false;
+    updateStatus("Tu turno. Elige ramas a tachar.");
+    renderPyramid();
+  }
 
-        // Variables de Audio
-        let toneStarted = false;
-        let isMusicPlaying = false;
-        let synth;
-        let musicLoop;
+  function renderPyramid() {
+    const container = document.getElementById('pyramid');
+    container.innerHTML = '';
 
-        // Configuración de música japonesa procedimental (Tone.js)
-        async function setupAudio() {
-            if (toneStarted) return;
-            await Tone.start();
-            toneStarted = true;
+    for (let r = 0; r < 10; r++) {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'row';
 
-            // Efectos de ambiente (Reverb y Delay)
-            const reverb = new Tone.Reverb({ decay: 6, wet: 0.7 }).toDestination();
-            const delay = new Tone.FeedbackDelay("8n", 0.5).connect(reverb);
-            
-            // Sintetizador de cuerda pulsada (simulación de Koto/Shamisen)
-            synth = new Tone.PluckSynth({
-                attackNoise: 1,
-                dampening: 3000,
-                resonance: 0.85
-            }).connect(delay);
-            synth.volume.value = -5;
+      for (let c = 0; c < r + 1; c++) {
+        const twig = document.createElement('div');
+        twig.className = 'twig';
+        twig.innerHTML = createTwigSVG();
 
-            // Escala Insen (pentatónica japonesa)
-            const scale = ["D3", "Eb3", "G3", "A3", "Bb3", "D4", "Eb4", "G4", "A4", "Bb4", "D5"];
-            
-            // Bucle musical relajante
-            musicLoop = new Tone.Loop(time => {
-                if (!isMusicPlaying) return;
-                // 60% de probabilidad de tocar una nota para mantenerlo espaciado y ambiental
-                if (Math.random() > 0.4) {
-                    const note = scale[Math.floor(Math.random() * scale.length)];
-                    synth.triggerAttack(note, time);
-                }
-            }, "2n"); 
+        const isTaken = c >= gameState[r];
+        const isSelected = (selectedRow === r && selectedIndices.includes(c));
 
-            Tone.Transport.bpm.value = 65; // Tempo lento y calmado
-            Tone.Transport.start();
-            musicLoop.start(0);
+        if (isTaken) {
+          twig.classList.add('taken');
+        } else {
+          if (isSelected) {
+            twig.classList.add('selected');
+          }
+          twig.onclick = () => handleTwigClick(r, c);
         }
+        rowDiv.appendChild(twig);
+      }
+      container.appendChild(rowDiv);
+    }
+  }
 
-        async function toggleMusic() {
-            const btn = document.getElementById('btn-music');
-            if (!toneStarted) {
-                await setupAudio();
-            }
-            
-            isMusicPlaying = !isMusicPlaying;
-            if (isMusicPlaying) {
-                btn.innerText = "🎵 Música: ON";
-                btn.classList.add("bg-[#5d4037]", "text-white");
-                btn.classList.remove("bg-transparent", "text-[#5d4037]");
-            } else {
-                btn.innerText = "🎵 Música: OFF";
-                btn.classList.remove("bg-[#5d4037]", "text-white");
-                btn.classList.add("bg-transparent", "text-[#5d4037]");
-            }
+  function handleTwigClick(r, c) {
+    if (!isPlayerTurn) return;
+
+    if (selectedRow !== -1 && selectedRow !== r) {
+      selectedIndices = [];
+    }
+
+    selectedRow = r;
+    const indexPos = selectedIndices.indexOf(c);
+    if (indexPos > -1) {
+      selectedIndices.splice(indexPos, 1);
+      if (selectedIndices.length === 0) selectedRow = -1;
+    } else {
+      selectedIndices.push(c);
+    }
+
+    renderPyramid();
+  }
+
+  function confirmMove() {
+    if (!isPlayerTurn || selectedIndices.length === 0) return;
+
+    gameState[selectedRow] -= selectedIndices.length;
+    selectedRow = -1;
+    selectedIndices = [];
+
+    renderPyramid();
+
+    if (checkGameOver()) return;
+
+    isPlayerTurn = false;
+    document.getElementById('confirm-btn').disabled = true;
+    updateStatus("Pensando jugada la IA...");
+    setTimeout(aiTurn, 700);
+  }
+
+  function aiTurn() {
+    let move = getAIMove();
+    gameState[move.row] -= move.count;
+
+    renderPyramid();
+
+    if (checkGameOver()) return;
+
+    isPlayerTurn = true;
+    document.getElementById('confirm-btn').disabled = false;
+    updateStatus("Tu turno. Elige ramas a tachar.");
+  }
+
+  function getAIMove() {
+    let activeRows = [];
+    for (let i = 0; i < 10; i++) {
+      if (gameState[i] > 0) activeRows.push(i);
+    }
+
+    let rowsWithMoreThanOne = activeRows.filter(r => gameState[r] > 1);
+    let bestMove = null;
+
+    if (rowsWithMoreThanOne.length === 0) {
+      let r = activeRows[0];
+      bestMove = { row: r, count: 1 };
+    } else if (rowsWithMoreThanOne.length === 1) {
+      let targetRow = rowsWithMoreThanOne[0];
+      let oddCount = (activeRows.length - 1) % 2 !== 0;
+      let leave = oddCount ? 1 : 0;
+      let remove = gameState[targetRow] - leave;
+      if (remove <= 0) remove = 1;
+      bestMove = { row: targetRow, count: remove };
+    } else {
+      let xorSum = 0;
+      for (let i = 0; i < 10; i++) xorSum ^= gameState[i];
+
+      if (xorSum !== 0) {
+        for (let i = 0; i < 10; i++) {
+          let target = gameState[i] ^ xorSum;
+          if (target < gameState[i]) {
+            bestMove = { row: i, count: gameState[i] - target };
+            break;
+          }
         }
+      }
+    }
 
-        // SVG personalizado de una Ramita de Mora (Tallo marrón, espinas, hojas y moras)
-        function getTwigSVG() {
-            return `
-            <svg class="w-4 h-7 sm:w-6 sm:h-10 md:w-7 md:h-12 drop-shadow-md" viewBox="0 0 40 80" xmlns="http://www.w3.org/2000/svg">
-                <!-- Tallo central -->
-                <path d="M20,80 Q25,60 18,40 T20,0" stroke="#4a3b2f" stroke-width="4" fill="none" stroke-linecap="round"/>
-                <!-- Espinas -->
-                <path d="M21,65 L27,61" stroke="#4a3b2f" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M19,45 L13,41" stroke="#4a3b2f" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M21,25 L27,21" stroke="#4a3b2f" stroke-width="2.5" stroke-linecap="round"/>
-                <!-- Hoja verde -->
-                <path d="M20,30 Q32,22 34,10 Q22,14 20,30" fill="#4caf50" stroke="#2e7d32" stroke-width="1.5"/>
-                <!-- Moras (frutos oscuros) -->
-                <circle cx="28" cy="18" r="2.5" fill="#311b92"/>
-                <circle cx="31" cy="20" r="2.5" fill="#311b92"/>
-                <circle cx="29" cy="23" r="2.5" fill="#311b92"/>
-                <circle cx="33" cy="17" r="2.5" fill="#311b92"/>
-            </svg>`;
+    if (difficulty === 'easy' && Math.random() < 0.7) bestMove = null;
+    if (difficulty === 'medium' && Math.random() < 0.35) bestMove = null;
+
+    if (!bestMove) {
+      let r = activeRows[Math.floor(Math.random() * activeRows.length)];
+      let count = Math.floor(Math.random() * gameState[r]) + 1;
+      bestMove = { row: r, count: count };
+    }
+
+    return bestMove;
+  }
+
+  function checkGameOver() {
+    let totalLeft = gameState.reduce((a, b) => a + b, 0);
+
+    if (totalLeft === 1) {
+      if (isPlayerTurn) {
+        updateStatus("🎉 ¡Ganaste! La IA se quedó con la última ramita.");
+      } else {
+        updateStatus("💀 Perdiste. Te quedó la última ramita.");
+      }
+      document.getElementById('confirm-btn').disabled = true;
+      return true;
+    } else if (totalLeft === 0) {
+      if (isPlayerTurn) {
+        updateStatus("💀 Perdiste. Tomaste la última ramita.");
+      } else {
+        updateStatus("🎉 ¡Ganaste! La IA tomó la última ramita.");
+      }
+      document.getElementById('confirm-btn').disabled = true;
+      return true;
+    }
+    return false;
+  }
+
+  function updateStatus(msg) {
+    document.getElementById('status').innerHTML = msg;
+  }
+
+  function resetGame() {
+    initBoard();
+  }
+
+  function changeDifficulty(val) {
+    difficulty = val;
+  }
+
+  async function toggleMusic() {
+    const btn = document.getElementById('music-btn');
+    if (!musicPlaying) {
+      await Tone.start();
+      
+      const reverb = new Tone.Reverb({ decay: 4, wet: 0.5 }).toDestination();
+      synth = new Tone.PluckSynth({
+        attackNoise: 1.5,
+        dampening: 4000,
+        resonance: 0.9
+      }).connect(reverb);
+
+      const scale = ["C4", "D4", "F4", "G4", "A4", "C5", "D5"];
+      
+      loop = new Tone.Loop(time => {
+        if (Math.random() > 0.2) {
+          let note = scale[Math.floor(Math.random() * scale.length)];
+          synth.triggerAttack(note, time);
         }
+      }, "8n").start(0);
 
-        // Inicializa o reinicia el tablero de juego
-        function initGame() {
-            gameBoard = [];
-            for(let r = 1; r <= TOTAL_ROWS; r++) {
-                let row = [];
-                for(let c = 0; c < r; c++) {
-                    row.push({ active: true });
-                }
-                gameBoard.push(row);
-            }
-            currentSelection = { row: null, twigs: new Set() };
-            isPlayerTurn = true;
-            isGameOver = false;
-            updateUI();
-        }
+      Tone.Transport.bpm.value = 75;
+      Tone.Transport.start();
 
-        // Dibuja el tablero en el DOM
-        function renderBoard() {
-            const boardEl = document.getElementById('game-board');
-            boardEl.innerHTML = '';
-            
-            gameBoard.forEach((row, rIdx) => {
-                // El contenedor mantiene un alto fijo para que la pirámide no colapse visualmente al quitar ramas
-                const rowDiv = document.createElement('div');
-                rowDiv.className = 'flex justify-center items-center gap-0.5 sm:gap-1.5 md:gap-2 mb-0.5 sm:mb-1 w-full h-7 sm:h-10 md:h-12';
-                
-                row.forEach((twig, cIdx) => {
-                    const twigEl = document.createElement('div');
-                    // Mayor padding para aumentar el área táctil (touch target) sin deformar la imagen
-                    twigEl.className = 'twig-wrapper p-1 sm:p-2';
-                    twigEl.innerHTML = getTwigSVG();
-                    
-                    if(!twig.active) {
-                        // Si la rama ya fue tomada, la oscurecemos y bloqueamos
-                        twigEl.classList.add('used-twig');
-                    } else {
-                        // Bloqueo visual si no es el turno o si es Game Over
-                        if(!isPlayerTurn || isGameOver) {
-                            twigEl.classList.add('disabled');
-                        }
-                        
-                        // Aplicar estado visual si está seleccionada
-                        if(currentSelection.row === rIdx && currentSelection.twigs.has(cIdx)) {
-                            twigEl.classList.add('selected-twig');
-                        }
-                        
-                        twigEl.onclick = () => handleTwigClick(rIdx, cIdx);
-                    }
-                    
-                    rowDiv.appendChild(twigEl);
-                });
-                
-                boardEl.appendChild(rowDiv);
-            });
-        }
+      musicPlaying = true;
+      btn.innerHTML = "🎵 ON";
+    } else {
+      Tone.Transport.stop();
+      if (loop) loop.dispose();
+      musicPlaying = false;
+      btn.innerHTML = "🎵 OFF";
+    }
+  }
 
-        // Interacción de clic en las ramitas
-        function handleTwigClick(rIdx, cIdx) {
-            if (!isPlayerTurn || isGameOver || !gameBoard[rIdx][cIdx].active) return;
-            
-            // Si el jugador intenta seleccionar una rama de un renglón diferente, reseteamos
-            if (currentSelection.row !== null && currentSelection.row !== rIdx) {
-                currentSelection.twigs.clear();
-            }
-            
-            currentSelection.row = rIdx;
-            
-            // Alternar selección de esa ramita
-            if (currentSelection.twigs.has(cIdx)) {
-                currentSelection.twigs.delete(cIdx);
-            } else {
-                currentSelection.twigs.add(cIdx);
-            }
-            
-            // Si no hay ramas seleccionadas, liberamos el renglón
-            if (currentSelection.twigs.size === 0) {
-                currentSelection.row = null;
-            }
-            
-            updateUI();
-        }
-
-        // Actualiza botones y mensajes según el estado actual
-        function updateUI() {
-            renderBoard();
-            const btn = document.getElementById('btn-confirm');
-            const msg = document.getElementById('status-msg');
-            
-            if (isGameOver) {
-                btn.disabled = true;
-                btn.className = "bg-[#5d4037] text-white px-8 py-3 rounded-lg font-bold shadow-lg opacity-50 cursor-not-allowed";
-                return;
-            }
-            
-            if (isPlayerTurn) {
-                msg.innerText = "Tu turno. Elige ramas a tachar.";
-                msg.className = "text-xl sm:text-2xl font-bold mb-6 text-center h-8 text-[#2e7d32] turn-active";
-                
-                if (currentSelection.twigs.size > 0) {
-                    btn.disabled = false;
-                    btn.className = "bg-[#5d4037] text-white px-8 py-3 rounded-lg font-bold shadow-lg transition-all duration-200 hover:bg-[#4e342e] hover:scale-105";
-                } else {
-                    btn.disabled = true;
-                    btn.className = "bg-[#5d4037] text-white px-8 py-3 rounded-lg font-bold shadow-lg opacity-50 cursor-not-allowed transition-all duration-200";
-                }
-            } else {
-                msg.innerText = "La computadora está pensando...";
-                msg.className = "text-xl sm:text-2xl font-bold mb-6 text-center h-8 text-[#d84315] turn-active";
-                btn.disabled = true;
-                btn.className = "bg-[#5d4037] text-white px-8 py-3 rounded-lg font-bold shadow-lg opacity-50 cursor-not-allowed";
-            }
-        }
-
-        // Flujo del botón "Confirmar" por el usuario
-        function confirmMove() {
-            if(!isPlayerTurn || isGameOver || currentSelection.twigs.size === 0) return;
-            
-            executeMove(currentSelection.row, Array.from(currentSelection.twigs));
-            
-            if(checkGameOver('humano')) return;
-            
-            isPlayerTurn = false;
-            updateUI();
-            
-            // Simular tiempo de "pensamiento" de la máquina
-            setTimeout(aiTurn, 1000);
-        }
-
-        // Función central para ejecutar un movimiento
-        function executeMove(rIdx, twigIndices) {
-            twigIndices.forEach(cIdx => {
-                gameBoard[rIdx][cIdx].active = false;
-            });
-            currentSelection = { row: null, twigs: new Set() };
-        }
-
-        // Lógica de Inteligencia Artificial (Estrategia Óptima Nim - Misère)
-        function aiTurn() {
-            // Contar el número de ramas activas por fila
-            let sizes = gameBoard.map(r => r.filter(t => t.active).length);
-            
-            // Determinar si la IA juega óptimo (según dificultad)
-            const diffSelect = document.getElementById('difficulty-select');
-            const diff = diffSelect ? diffSelect.value : 'leyenda';
-            let playOptimal = true;
-            let rand = Math.random();
-            
-            // Aprendiz: 80% probabilidad de jugar al azar (20% óptimo)
-            if (diff === 'aprendiz' && rand > 0.20) playOptimal = false;
-            // Sabio: 50% probabilidad de jugar al azar (50% óptimo)
-            if (diff === 'sabio' && rand > 0.50) playOptimal = false;
-            // Leyenda: 100% óptimo
-            
-            let move;
-            if (playOptimal) {
-                move = getAIMove(sizes);
-            } else {
-                move = getRandomMove(sizes);
-            }
-            
-            // Recopilamos los índices de las ramas activas en la fila elegida
-            let activeIndices = [];
-            gameBoard[move.row].forEach((t, idx) => {
-                if(t.active) activeIndices.push(idx);
-            });
-            
-            // Tomamos las primeras 'X' ramas que la IA decidió
-            let twigsToTake = activeIndices.slice(0, move.take);
-            
-            // Para efecto visual, marcamos temporalmente las ramas que la IA eligió
-            currentSelection.row = move.row;
-            currentSelection.twigs = new Set(twigsToTake);
-            
-            document.getElementById('status-msg').innerText = "La computadora ha jugado...";
-            document.getElementById('status-msg').classList.remove('turn-active');
-            renderBoard(); // Muestra las X en rojo elegidas por IA
-            
-            // 800ms después, ejecutamos la eliminación y pasamos el turno
-            setTimeout(() => {
-                executeMove(move.row, twigsToTake);
-                if(checkGameOver('computadora')) return;
-                
-                isPlayerTurn = true;
-                updateUI();
-            }, 1200);
-        }
-
-        // Movimiento aleatorio para los niveles de dificultad bajos
-        function getRandomMove(sizes) {
-            let validRows = [];
-            sizes.forEach((size, idx) => {
-                if (size > 0) validRows.push(idx);
-            });
-            
-            // Elegimos una fila al azar que tenga ramitas
-            let randomRow = validRows[Math.floor(Math.random() * validRows.length)];
-            // Tomamos una cantidad aleatoria de ramitas de esa fila (al menos 1)
-            let take = Math.floor(Math.random() * sizes[randomRow]) + 1;
-            
-            return { row: randomRow, take: take };
-        }
-
-        // Algoritmo matemático para variante Misère
-        function getAIMove(sizes) {
-            let nimSum = 0;
-            let countGreaterThanOne = 0; // Filas con > 1 rama
-            let largestSize = 0;
-            let largestIdx = -1;
-            
-            for (let i = 0; i < sizes.length; i++) {
-                nimSum ^= sizes[i];
-                if (sizes[i] > 1) countGreaterThanOne++;
-                if (sizes[i] > largestSize) {
-                    largestSize = sizes[i];
-                    largestIdx = i;
-                }
-            }
-            
-            // Endgame Misère (solo queda 1 o 0 filas grandes)
-            if (countGreaterThanOne === 0 || countGreaterThanOne === 1) {
-                let size1Heaps = sizes.filter(s => s === 1).length;
-                
-                if (countGreaterThanOne === 1) {
-                    // Si queda una fila > 1, la reducimos para dejar un número IMPAR de filas con 1 rama
-                    let bigRowIdx = sizes.findIndex(s => s > 1);
-                    let targetSize = (size1Heaps % 2 === 0) ? 1 : 0;
-                    return { row: bigRowIdx, take: sizes[bigRowIdx] - targetSize };
-                } else {
-                    // Si ya todo son filas de tamaño 1, la IA está forzada a tomar 1
-                    let idx = sizes.findIndex(s => s === 1);
-                    return { row: idx, take: 1 };
-                }
-            }
-            
-            // Juego Normal (XOR)
-            if (nimSum !== 0) {
-                for (let i = 0; i < sizes.length; i++) {
-                    let target = sizes[i] ^ nimSum;
-                    if (target < sizes[i]) {
-                        return { row: i, take: sizes[i] - target };
-                    }
-                }
-            }
-            
-            // Posición perdedora (la IA hace tiempo restando 1 rama de la fila más grande)
-            return { row: largestIdx, take: 1 };
-        }
-
-        // Verifica la condición de victoria/derrota
-        function checkGameOver(lastPlayer) {
-            let sizes = gameBoard.map(r => r.filter(t => t.active).length);
-            let totalActive = sizes.reduce((a, b) => a + b, 0);
-            
-            if (totalActive === 0) {
-                isGameOver = true;
-                showGameOver(lastPlayer);
-                return true;
-            }
-            return false;
-        }
-
-        // Muestra el Modal de resultados
-        function showGameOver(lastPlayer) {
-            const modal = document.getElementById('game-over-modal');
-            const modalTitle = document.getElementById('modal-title');
-            const modalDesc = document.getElementById('modal-desc');
-            const statusMsg = document.getElementById('status-msg');
-            
-            statusMsg.innerText = "Juego terminado.";
-            statusMsg.classList.remove('turn-active');
-            
-            if (lastPlayer === 'humano') {
-                modalTitle.innerText = "¡Has perdido!";
-                modalTitle.className = "text-4xl font-bold text-red-600 mb-4";
-                modalDesc.innerText = "Tomaste la última ramita de mora. La computadora se lleva la victoria.";
-            } else {
-                modalTitle.innerText = "¡Ganaste!";
-                modalTitle.className = "text-4xl font-bold text-green-600 mb-4";
-                modalDesc.innerText = "La computadora fue obligada a tomar la última ramita. ¡Felicidades!";
-            }
-            
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function closeModalAndRestart() {
-            const modal = document.getElementById('game-over-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            initGame();
-        }
-
-        // Carga inicial
-        window.onload = function() {
-            initGame();
-        };
-    </script>
+  initBoard();
+</script>
 </body>
 </html>
