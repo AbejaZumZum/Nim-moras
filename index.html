@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Nim: Ramitas de Mora</title>
-  <!-- Optional Tone.js for music; game runs 100% fail-safe with or without it -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <!-- PeerJS para multijugador P2P sin configuración -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -41,41 +42,41 @@
     }
 
     h1 {
-      margin: 0 0 4px 0;
-      font-size: 1.3rem;
+      margin: 0 0 8px 0;
+      font-size: 1.4rem;
       text-align: center;
       color: #3e2723;
     }
 
     .rules {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       text-align: center;
       color: #5d4037;
-      margin-bottom: 8px;
-      line-height: 1.25;
-      background: rgba(255, 255, 255, 0.4);
-      padding: 6px 10px;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .status-msg {
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #2e7d32;
+      min-height: 1.4em;
+      margin-bottom: 12px;
+      text-align: center;
+      background: #e0d7ce;
+      padding: 6px 12px;
       border-radius: 8px;
       width: 100%;
     }
 
-    .status-msg {
-      font-size: 0.88rem;
-      font-weight: bold;
-      color: #2e7d32;
-      min-height: 1.5em;
-      margin-bottom: 8px;
-      text-align: center;
-    }
-
-    /* Pirámide de ramitas */
+    /* Pirámide */
     .pyramid {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 2px;
       width: 100%;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
 
     .row {
@@ -96,44 +97,23 @@
       transition: transform 0.15s ease, filter 0.2s ease;
     }
 
-    .twig:hover:not(.taken) {
-      transform: scale(1.15);
-    }
+    .twig svg { width: 100%; height: 100%; pointer-events: none; }
+    .twig.selected svg .selection-line { display: block !important; }
+    .twig.taken { cursor: default; opacity: 0.25; filter: grayscale(100%) brightness(40%); }
+    .twig.taken svg .selection-line { display: none !important; }
 
-    .twig svg {
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-
-    /* Estado seleccionado: Rayita cyan horizontal */
-    .twig.selected svg .selection-line {
-      display: block !important;
-    }
-
-    /* Estado tachado/apagado */
-    .twig.taken {
-      cursor: default;
-      opacity: 0.22;
-      filter: grayscale(100%) brightness(40%);
-    }
-
-    .twig.taken svg .selection-line {
-      display: none !important;
-    }
-
-    /* Panel de Botones Compacto */
-    .controls {
+    /* Botones */
+    .controls, .menu-controls {
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
 
     .btn-main {
       width: 100%;
-      padding: 10px;
-      font-size: 0.95rem;
+      padding: 12px;
+      font-size: 1rem;
       font-family: inherit;
       font-weight: bold;
       background-color: #a1887f;
@@ -142,33 +122,23 @@
       border-radius: 10px;
       cursor: pointer;
       box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-      transition: background 0.2s, transform 0.1s;
+      transition: background 0.2s;
     }
 
-    .btn-main:active:not(:disabled) {
-      background-color: #8d6e63;
-      transform: translateY(1px);
-    }
+    .btn-main:active { background-color: #8d6e63; transform: translateY(1px); }
+    .btn-main:disabled { background-color: #d7ccc8; color: #a1887f; cursor: not-allowed; box-shadow: none; }
 
-    .btn-main:disabled {
-      background-color: #d7ccc8;
-      color: #a1887f;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    /* Fila de controles secundarios */
     .sub-controls {
       display: grid;
-      grid-template-columns: 1fr 1.1fr 1.1fr 0.8fr;
-      gap: 4px;
+      grid-template-columns: 1fr 1fr 1.1fr 0.8fr;
+      gap: 6px;
       width: 100%;
     }
 
-    .btn-sub, .select-sub {
+    .btn-sub, .select-sub, .input-sub {
       width: 100%;
-      padding: 8px 2px;
-      font-size: 0.72rem;
+      padding: 8px 4px;
+      font-size: 0.75rem;
       font-family: inherit;
       font-weight: bold;
       background-color: #f5f0eb;
@@ -182,86 +152,68 @@
       justify-content: center;
     }
 
+    .input-sub { cursor: text; text-align: left; padding: 8px; }
+
     .select-sub {
       appearance: none;
       -webkit-appearance: none;
       background-image: url('data:image/svg+xml;utf8,<svg fill="%234e342e" height="10" viewBox="0 0 24 24" width="10" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
       background-repeat: no-repeat;
-      background-position: right 2px center;
-      padding-right: 12px;
+      background-position: right 4px center;
+      padding-right: 14px;
     }
 
-    .btn-sub:active, .select-sub:active {
-      background-color: #e0d7ce;
-    }
-
-    /* ----- Lobby Styles ----- */
-    .lobby-container {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      align-items: center;
+    /* Pantallas */
+    #game-screen { display: none; }
+    #lobby-screen { display: flex; }
+    
+    .divider {
       width: 100%;
-    }
-
-    .input-code {
-      padding: 10px;
-      border-radius: 8px;
-      border: 1px solid #bcaaa4;
-      text-align: center;
-      text-transform: uppercase;
-      font-weight: bold;
-      font-size: 1.1rem;
-      width: 100%;
-      background: #fdfbf7;
-      color: #3e2723;
-      outline: none;
+      height: 1px;
+      background: #bcaaa4;
+      margin: 10px 0;
     }
   </style>
 </head>
 <body>
 
-<div id="lobby" class="game-container">
+<!-- PANTALLA DE INICIO / LOBBY -->
+<div id="lobby-screen" class="game-container">
   <h1>Nim: Ramitas de Mora</h1>
-  <div class="rules" style="margin-bottom: 16px;">
-    Elige cómo deseas jugar.
+  <div class="rules">Elige un modo de juego para empezar.</div>
+
+  <div class="menu-controls">
+    <button class="btn-main" onclick="startLocal()">🤖 Jugar Local (vs IA)</button>
+    <div class="divider"></div>
+    <button class="btn-main" style="background-color: #6d4c41;" onclick="createRoom()">📡 Crear Sala Online</button>
+    
+    <div style="display: flex; gap: 6px;">
+      <input type="text" id="join-code" class="input-sub" placeholder="Pegar código aquí...">
+      <button class="btn-sub" style="background-color: #795548; color: white;" onclick="joinRoom()">Unirse</button>
+    </div>
   </div>
   
-  <div class="lobby-container">
-    <button class="btn-main" onclick="startLocal()">🤖 Jugar vs IA (Local)</button>
-    <div style="width: 100%; height: 1px; background: #bcaaa4; margin: 8px 0;"></div>
-    <button id="btn-create-room" class="btn-main" style="background-color: #6d4c41;" onclick="createRoom()">🌐 Crear Sala Online</button>
-    
-    <div style="display: flex; gap: 8px; width: 100%; margin-top: 8px;">
-      <input type="text" id="join-code" class="input-code" placeholder="CÓDIGO (ej. ABCD)" maxlength="5">
-      <button id="btn-join-room" class="btn-main" style="background-color: #5d4037; flex: 1;" onclick="joinRoom()">Unirse</button>
-    </div>
-    <div id="lobby-status" class="status-msg" style="margin-top: 8px; min-height: 1em; color: #d32f2f;"></div>
-  </div>
+  <div id="lobby-status" class="status-msg" style="margin-top: 15px; display: none;"></div>
 </div>
 
-<div id="game" class="game-container" style="display: none;">
+<!-- PANTALLA DE JUEGO -->
+<div id="game-screen" class="game-container">
   <h1>Nim: Ramitas de Mora</h1>
-  <div id="room-display" style="font-size: 0.8rem; color: #5d4037; font-weight: bold; margin-bottom: 4px; display: none;"></div>
-  <div id="rules-desc" class="rules">
-    <!-- Carga dinámica según el modo -->
-  </div>
-
-  <div id="status" class="status-msg">Iniciando juego...</div>
-
+  <div id="rules-desc" class="rules"></div>
+  <div id="status" class="status-msg">Iniciando...</div>
   <div id="pyramid" class="pyramid"></div>
 
   <div class="controls">
     <button id="confirm-btn" class="btn-main" onclick="confirmMove()">Confirmar jugada</button>
     
     <div class="sub-controls">
-      <button id="reset-btn" class="btn-sub" onclick="resetGame()">🔄 Reiniciar</button>
+      <button id="btn-restart" class="btn-sub" onclick="resetGame()">🔄 Reiniciar</button>
 
       <select id="game-mode" class="select-sub" onchange="changeGameMode(this.value)">
         <option value="misere" selected>🎭 Misère</option>
         <option value="fibonacci">🌀 Fibonacci</option>
       </select>
-
+      
       <select id="difficulty" class="select-sub" onchange="changeDifficulty(this.value)">
         <option value="easy">🌱 Aprendiz</option>
         <option value="medium">🌿 Sabio</option>
@@ -270,237 +222,32 @@
 
       <button id="music-btn" class="btn-sub" onclick="toggleMusic()">🎵 OFF</button>
     </div>
+    
+    <!-- Botón para salir del multijugador -->
+    <button id="btn-leave" class="btn-sub" style="display: none; background-color: #e57373; color: white; margin-top: 5px;" onclick="leaveOnline()">❌ Salir de la sala</button>
   </div>
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-  // Global Config & Firebase
-  const appId = typeof __app_id !== 'undefined' ? __app_id : 'nim-mora-app';
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-  const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-  
-  let app, db, auth, userId = null;
-  let unsubRoom = null;
-  let isFirebaseReady = false;
-
-  // Variables de estado del juego
+<script>
   let gameState = [];
   let selectedRow = -1;
   let selectedIndices = [];
+  let isPlayerTurn = true;
+  
+  // Opciones
   let difficulty = 'hard';
   let gameMode = 'misere';
   let lastMoveCount = 0; 
   let musicPlaying = false;
-  let synth = null, loop = null;
+  let synth, loop;
 
-  // Variables de estado Multijugador
-  let playMode = 'local'; // 'local' o 'online'
-  let isPlayerTurn = true; // Turno local contra IA
-  let roomId = null;
-  let playerId = null; // 1 (Creador) o 2 (Invitado)
-  let currentTurn = 1; // De quién es el turno online
+  // Variables Multijugador (PeerJS)
+  let isMultiplayer = false;
+  let isHost = false;
+  let peer = null;
+  let conn = null;
 
-  async function initFirebase() {
-    if (isFirebaseReady) return true;
-    if (!firebaseConfig) {
-      document.getElementById('lobby-status').innerText = "⚠️ Entorno sin Firebase detectado.";
-      return false;
-    }
-    try {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-      if (initialToken) {
-        await signInWithCustomToken(auth, initialToken);
-      } else {
-        await signInAnonymously(auth);
-      }
-      userId = auth.currentUser.uid;
-      isFirebaseReady = true;
-      return true;
-    } catch (e) {
-      console.error("Firebase init error:", e);
-      document.getElementById('lobby-status').innerText = "⚠️ Error al conectar online.";
-      return false;
-    }
-  }
-
-  window.startLocal = () => {
-    playMode = 'local';
-    document.getElementById('lobby').style.display = 'none';
-    document.getElementById('game').style.display = 'flex';
-    document.getElementById('room-display').style.display = 'none';
-    initBoardLocal();
-  };
-
-  function generateRoomCode() {
-    return Math.random().toString(36).substring(2, 6).toUpperCase();
-  }
-
-  window.createRoom = async () => {
-    const btn = document.getElementById('btn-create-room');
-    btn.disabled = true;
-    document.getElementById('lobby-status').innerText = "Creando sala...";
-    
-    if (!(await initFirebase())) {
-        btn.disabled = false;
-        return;
-    }
-
-    roomId = generateRoomCode();
-    playerId = 1;
-    playMode = 'online';
-
-    const initGameState = [];
-    for (let r = 1; r <= 10; r++) initGameState.push(r);
-
-    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-    
-    try {
-        await setDoc(roomRef, {
-            gameState: initGameState,
-            gameMode: document.getElementById('game-mode').value,
-            lastMoveCount: 0,
-            turn: Math.random() < 0.5 ? 1 : 2, // Sorteo online
-            player1: userId,
-            player2: null,
-            status: 'waiting',
-            winner: null
-        });
-        
-        document.getElementById('lobby').style.display = 'none';
-        document.getElementById('game').style.display = 'flex';
-        
-        const roomDisplay = document.getElementById('room-display');
-        roomDisplay.style.display = 'block';
-        roomDisplay.innerText = `SALA ONLINE: ${roomId}`;
-        
-        // Ocultar dificultad en online
-        document.getElementById('difficulty').style.display = 'none';
-        
-        listenRoom(roomId);
-    } catch (e) {
-        console.error(e);
-        document.getElementById('lobby-status').innerText = "Error creando sala.";
-        btn.disabled = false;
-    }
-  };
-
-  window.joinRoom = async () => {
-    const input = document.getElementById('join-code').value.trim().toUpperCase();
-    if (input.length < 4) {
-        document.getElementById('lobby-status').innerText = "Código inválido.";
-        return;
-    }
-    
-    const btn = document.getElementById('btn-join-room');
-    btn.disabled = true;
-    document.getElementById('lobby-status').innerText = "Conectando...";
-
-    if (!(await initFirebase())) {
-        btn.disabled = false;
-        return;
-    }
-
-    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', input);
-    const docSnap = await getDoc(roomRef);
-
-    if (!docSnap.exists()) {
-        document.getElementById('lobby-status').innerText = "Sala no encontrada.";
-        btn.disabled = false;
-        return;
-    }
-    
-    const data = docSnap.data();
-    if (data.player2 && data.player2 !== userId) {
-        document.getElementById('lobby-status').innerText = "La sala está llena.";
-        btn.disabled = false;
-        return;
-    }
-
-    roomId = input;
-    playerId = 2;
-    playMode = 'online';
-
-    try {
-        await updateDoc(roomRef, {
-            player2: userId,
-            status: data.status === 'waiting' ? 'playing' : data.status
-        });
-        
-        document.getElementById('lobby').style.display = 'none';
-        document.getElementById('game').style.display = 'flex';
-        
-        const roomDisplay = document.getElementById('room-display');
-        roomDisplay.style.display = 'block';
-        roomDisplay.innerText = `SALA ONLINE: ${roomId}`;
-        
-        // Ocultar controles que solo maneja P1
-        document.getElementById('difficulty').style.display = 'none';
-        document.getElementById('game-mode').disabled = true;
-        document.getElementById('reset-btn').style.display = 'none';
-        
-        listenRoom(roomId);
-    } catch(e) {
-        console.error(e);
-        document.getElementById('lobby-status').innerText = "Error al unirse.";
-        btn.disabled = false;
-    }
-  };
-
-  function listenRoom(roomCode) {
-    if (unsubRoom) unsubRoom();
-    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-    
-    unsubRoom = onSnapshot(roomRef, (docSnap) => {
-        if (!docSnap.exists()) return;
-        const data = docSnap.data();
-        
-        gameState = data.gameState;
-        gameMode = data.gameMode;
-        lastMoveCount = data.lastMoveCount;
-        currentTurn = data.turn;
-        
-        if (playerId === 2) {
-            document.getElementById('game-mode').value = gameMode;
-        }
-        
-        selectedRow = -1;
-        selectedIndices = [];
-        
-        updateRulesText();
-        renderPyramid();
-        
-        const confirmBtn = document.getElementById('confirm-btn');
-        
-        if (data.status === 'waiting') {
-            updateStatus(`Esperando oponente...`);
-            confirmBtn.disabled = true;
-        } else if (data.status === 'playing') {
-            if (currentTurn === playerId) {
-                updateStatus("🎲 Tu turno. Elige ramas a tachar.");
-                confirmBtn.disabled = false;
-            } else {
-                updateStatus("Esperando jugada del oponente...");
-                confirmBtn.disabled = true;
-            }
-        } else if (data.status === 'over') {
-            confirmBtn.disabled = true;
-            if (data.winner === playerId) {
-                updateStatus("🎉 ¡Ganaste la partida!");
-            } else {
-                updateStatus("💀 Perdiste la partida.");
-            }
-        }
-    }, (error) => {
-        console.error("Sync error:", error);
-    });
-  }
-
+  // --- SVG DE LA RAMITA ---
   function createTwigSVG() {
     return `
       <svg viewBox="0 0 30 50" xmlns="http://www.w3.org/2000/svg">
@@ -534,67 +281,198 @@
     `;
   }
 
-  function updateRulesText() {
-    const rulesElem = document.getElementById('rules-desc');
-    if (!rulesElem) return;
-    if (gameMode === 'misere') {
-      rulesElem.innerHTML = `<strong>Modo Misère:</strong> Tacha cualquier cantidad en un solo renglón.<br>¡Quien tome la última ramita <strong>pierde</strong>!`;
+  // --- LOGICA DE INTERFAZ ---
+  function showLobbyMsg(msg) {
+    const el = document.getElementById('lobby-status');
+    el.style.display = 'block';
+    el.innerHTML = msg;
+  }
+
+  function showGameScreen() {
+    document.getElementById('lobby-screen').style.display = 'none';
+    document.getElementById('game-screen').style.display = 'flex';
+  }
+
+  function showLobbyScreen() {
+    document.getElementById('game-screen').style.display = 'none';
+    document.getElementById('lobby-screen').style.display = 'flex';
+    document.getElementById('lobby-status').style.display = 'none';
+  }
+
+  // --- MULTIJUGADOR PEERJS ---
+  function createRoom() {
+    showLobbyMsg("Generando código de sala...");
+    peer = new Peer();
+    
+    peer.on('open', id => {
+      showLobbyMsg(`✅ Sala creada. Pásale este código a tu amigo:<br><b style="font-size:1.2rem; color:#d84315; user-select:all;">${id}</b><br><small>(Esperando que se una...)</small>`);
+    });
+
+    peer.on('connection', connection => {
+      conn = connection;
+      isMultiplayer = true;
+      isHost = true;
+      setupConnection();
+      initBoard(); // El host sortea e inicia el juego
+    });
+    
+    peer.on('error', err => { showLobbyMsg("⚠️ Error de conexión: " + err.type); });
+  }
+
+  function joinRoom() {
+    const id = document.getElementById('join-code').value.trim();
+    if (!id) return alert("Ingresa un código");
+    
+    showLobbyMsg("Conectando con la sala...");
+    peer = new Peer();
+    
+    peer.on('open', () => {
+      conn = peer.connect(id);
+      conn.on('open', () => {
+        isMultiplayer = true;
+        isHost = false;
+        setupConnection();
+        showGameScreen();
+        updateStatus("✅ Conectado. Esperando que el anfitrión inicie...");
+        configureOnlineUI();
+      });
+    });
+    
+    peer.on('error', err => { showLobbyMsg("⚠️ Código inválido o sala cerrada."); });
+  }
+
+  function setupConnection() {
+    conn.on('data', data => {
+      if (data.type === 'START') {
+        gameState = data.gameState;
+        gameMode = data.gameMode;
+        document.getElementById('game-mode').value = gameMode;
+        lastMoveCount = 0;
+        selectedIndices = [];
+        selectedRow = -1;
+        isPlayerTurn = !data.hostStarts; // Si host empieza, guest espera
+        
+        renderPyramid();
+        updateRulesText();
+        updateStatus(isPlayerTurn ? "🎲 ¡Tu turno! Elige ramas." : "🎲 Turno de tu rival...");
+        document.getElementById('confirm-btn').disabled = !isPlayerTurn;
+      } 
+      else if (data.type === 'MOVE') {
+        gameState = data.gameState;
+        lastMoveCount = data.lastMoveCount;
+        isPlayerTurn = true;
+        selectedIndices = [];
+        selectedRow = -1;
+        
+        renderPyramid();
+        if (!checkGameOver()) {
+          updateStatus("¡Tu turno! Rival terminó su jugada.");
+          document.getElementById('confirm-btn').disabled = false;
+        }
+      }
+    });
+  }
+
+  function configureOnlineUI() {
+    document.getElementById('difficulty').style.display = 'none'; // IA no aplica
+    document.getElementById('btn-leave').style.display = 'block';
+    
+    // Solo el anfitrión puede reiniciar o cambiar modo
+    if (!isHost) {
+      document.getElementById('btn-restart').style.display = 'none';
+      document.getElementById('game-mode').disabled = true;
     } else {
-      rulesElem.innerHTML = `<strong>Modo Fibonacci:</strong> Tomas hasta 2× de la jugada anterior.<br>(En el 1.º turno no tomas toda la fila). ¡Quien tome la última <strong>gana</strong>!`;
+      document.getElementById('btn-restart').style.display = 'flex';
+      document.getElementById('game-mode').disabled = false;
     }
   }
 
-  function initBoardLocal() {
-    gameState = [];
-    for (let r = 1; r <= 10; r++) gameState.push(r);
+  function leaveOnline() {
+    if (conn) conn.close();
+    if (peer) peer.destroy();
+    isMultiplayer = false;
+    showLobbyScreen();
+  }
+
+  // --- LOGICA DEL JUEGO LOCAL/ONLINE ---
+  function startLocal() {
+    isMultiplayer = false;
+    document.getElementById('difficulty').style.display = 'flex';
+    document.getElementById('btn-leave').style.display = 'none';
+    document.getElementById('btn-restart').style.display = 'flex';
+    document.getElementById('game-mode').disabled = false;
+    initBoard();
+  }
+
+  function initBoard() {
+    showGameScreen();
+    gameState = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     selectedRow = -1;
     selectedIndices = [];
     lastMoveCount = 0;
-    
-    isPlayerTurn = Math.random() < 0.5;
 
-    renderPyramid();
-    updateRulesText();
-
-    const confirmBtn = document.getElementById('confirm-btn');
-    if (isPlayerTurn) {
-      if (confirmBtn) confirmBtn.disabled = false;
-      updateStatus("🎲 ¡Sorteo! Empiezas tú.");
+    if (isMultiplayer) {
+      configureOnlineUI();
+      if (isHost) {
+        let hostStarts = Math.random() < 0.5;
+        isPlayerTurn = hostStarts;
+        gameMode = document.getElementById('game-mode').value;
+        
+        // Enviar datos al rival
+        conn.send({ type: 'START', gameState, gameMode, hostStarts });
+        
+        renderPyramid();
+        updateRulesText();
+        updateStatus(isPlayerTurn ? "🎲 Sorteo: ¡Empiezas tú! Tu turno." : "🎲 Sorteo: Empieza el rival.");
+        document.getElementById('confirm-btn').disabled = !isPlayerTurn;
+      }
     } else {
-      if (confirmBtn) confirmBtn.disabled = true;
-      updateStatus("🎲 ¡Sorteo! La IA empieza...");
-      setTimeout(aiTurn, 900);
-    }
-  }
-
-  function getMaxAllowedForMove(r) {
-    if (gameMode === 'misere') {
-      return gameState[r];
-    } else {
-      if (lastMoveCount === 0) {
-        return Math.max(1, gameState[r] - 1);
+      // Sorteo Local
+      isPlayerTurn = Math.random() < 0.5;
+      renderPyramid();
+      updateRulesText();
+      
+      if (isPlayerTurn) {
+        document.getElementById('confirm-btn').disabled = false;
+        updateStatus("🎲 ¡Sorteo terminado! Empiezas tú.");
       } else {
-        return Math.min(gameState[r], 2 * lastMoveCount);
+        document.getElementById('confirm-btn').disabled = true;
+        updateStatus("🎲 Empieza la IA. Pensando...");
+        setTimeout(aiTurn, 1000);
       }
     }
   }
 
+  function updateRulesText() {
+    const rulesElem = document.getElementById('rules-desc');
+    if (gameMode === 'misere') {
+      rulesElem.innerHTML = `Quien se quede con la última ramita <strong>pierde</strong>!`;
+    } else {
+      rulesElem.innerHTML = `<strong>Modo Fibonacci:</strong> Puedes tomar hasta el doble de ramas que la jugada anterior (Turno 1 limitado).`;
+    }
+  }
+
+  function getMaxAllowedForMove(r) {
+    if (gameMode === 'misere') return gameState[r];
+    return lastMoveCount === 0 ? Math.max(1, gameState[r] - 1) : Math.min(gameState[r], 2 * lastMoveCount);
+  }
+
   function renderPyramid() {
     const container = document.getElementById('pyramid');
-    if (!container) return;
     container.innerHTML = '';
-    
+
     for (let r = 0; r < 10; r++) {
       const rowDiv = document.createElement('div');
       rowDiv.className = 'row';
+
       for (let c = 0; c < r + 1; c++) {
         const twig = document.createElement('div');
         twig.className = 'twig';
         twig.innerHTML = createTwigSVG();
-        
+
         const isTaken = c >= gameState[r];
         const isSelected = (selectedRow === r && selectedIndices.includes(c));
-        
+
         if (isTaken) {
           twig.classList.add('taken');
         } else {
@@ -607,121 +485,108 @@
     }
   }
 
-  window.handleTwigClick = (r, c) => {
-    if (playMode === 'local' && !isPlayerTurn) return;
-    if (playMode === 'online' && currentTurn !== playerId) return;
-
-    if (selectedRow !== -1 && selectedRow !== r) {
-      selectedIndices = [];
-    }
+  function handleTwigClick(r, c) {
+    if (!isPlayerTurn) return;
+    if (selectedRow !== -1 && selectedRow !== r) selectedIndices = [];
 
     selectedRow = r;
     const indexPos = selectedIndices.indexOf(c);
-
+    
     if (indexPos > -1) {
       selectedIndices.splice(indexPos, 1);
       if (selectedIndices.length === 0) selectedRow = -1;
     } else {
       let maxAllowed = getMaxAllowedForMove(r);
       if (selectedIndices.length + 1 > maxAllowed) {
-        updateStatus(`⚠️ Máximo ${maxAllowed} ramita(s) en esta jugada.`);
+        updateStatus(`⚠️ Modo Fibonacci: Máximo ${maxAllowed} ramitas.`);
         return;
       }
       selectedIndices.push(c);
     }
     renderPyramid();
-  };
+  }
 
-  window.confirmMove = async () => {
-    if (selectedIndices.length === 0) return;
+  function confirmMove() {
+    if (!isPlayerTurn || selectedIndices.length === 0) return;
+
+    lastMoveCount = selectedIndices.length;
+    gameState[selectedRow] -= selectedIndices.length;
+    selectedRow = -1;
+    selectedIndices = [];
+    isPlayerTurn = false;
+    document.getElementById('confirm-btn').disabled = true;
     
-    if (playMode === 'local') {
-        if (!isPlayerTurn) return;
-        lastMoveCount = selectedIndices.length;
-        gameState[selectedRow] -= selectedIndices.length;
-        selectedRow = -1;
-        selectedIndices = [];
-        renderPyramid();
-        if (checkGameOverLocal()) return;
-        isPlayerTurn = false;
-        document.getElementById('confirm-btn').disabled = true;
-        updateStatus("Pensando jugada la IA...");
-        setTimeout(aiTurn, 650);
-    } else {
-        // Online Move
-        if (currentTurn !== playerId) return;
-        document.getElementById('confirm-btn').disabled = true;
-        
-        let newLastMoveCount = selectedIndices.length;
-        gameState[selectedRow] -= selectedIndices.length;
-        
-        let nextTurn = currentTurn === 1 ? 2 : 1;
-        let winner = null;
-        let newStatus = 'playing';
-        
-        let totalLeft = gameState.reduce((a, b) => a + b, 0);
-        
-        if (gameMode === 'misere') {
-          if (totalLeft === 1) winner = currentTurn; // Siguiente es forzado a tomar la última y pierde
-          else if (totalLeft === 0) winner = nextTurn; // Actual tomó la última y pierde
-        } else {
-          if (totalLeft === 0) winner = currentTurn; // Actual tomó la última y gana
-        }
-        
-        if (winner !== null) newStatus = 'over';
-        
-        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-        await updateDoc(roomRef, {
-            gameState,
-            lastMoveCount: newLastMoveCount,
-            turn: nextTurn,
-            status: newStatus,
-            winner
-        });
-        // onSnapshot listener se encarga de la UI
-    }
-  };
+    renderPyramid();
 
+    if (isMultiplayer) {
+      conn.send({ type: 'MOVE', gameState, lastMoveCount });
+      if (!checkGameOver()) updateStatus("Turno del rival...");
+    } else {
+      if (!checkGameOver()) {
+        updateStatus("Pensando jugada la IA...");
+        setTimeout(aiTurn, 700);
+      }
+    }
+  }
+
+  function checkGameOver() {
+    let totalLeft = gameState.reduce((a, b) => a + b, 0);
+
+    if (gameMode === 'misere') {
+      if (totalLeft === 1) {
+        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! El rival se quedó con la última." : "💀 Perdiste. Te quedó la última.");
+        document.getElementById('confirm-btn').disabled = true;
+        return true;
+      } else if (totalLeft === 0) {
+        updateStatus(isPlayerTurn ? "💀 Perdiste. Tomaste la última ramita." : "🎉 ¡Ganaste! El rival tomó la última.");
+        document.getElementById('confirm-btn').disabled = true;
+        return true;
+      }
+    } else { 
+      if (totalLeft === 0) {
+        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! Has tomado la última ramita." : "💀 Perdiste. El rival tomó la última.");
+        document.getElementById('confirm-btn').disabled = true;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // --- INTELIGENCIA ARTIFICIAL (SOLO LOCAL) ---
   function aiTurn() {
     let move = getAIMove();
     if (move) {
-      lastMoveCount = move.count;
-      gameState[move.row] -= move.count;
+        lastMoveCount = move.count;
+        gameState[move.row] -= move.count;
     }
     renderPyramid();
-    if (checkGameOverLocal()) return;
+    if (checkGameOver()) return;
+
     isPlayerTurn = true;
-    const confirmBtn = document.getElementById('confirm-btn');
-    if (confirmBtn) confirmBtn.disabled = false;
+    document.getElementById('confirm-btn').disabled = false;
     updateStatus("Tu turno. Elige ramas a tachar.");
   }
 
   function getAIMove() {
     let activeRows = [];
-    for (let i = 0; i < 10; i++) {
-      if (gameState[i] > 0) activeRows.push(i);
-    }
-    if (activeRows.length === 0) return null;
-    
+    for (let i = 0; i < 10; i++) if (gameState[i] > 0) activeRows.push(i);
+
     let validMoves = [];
     for (let r of activeRows) {
       let maxAllowed = getMaxAllowedForMove(r);
-      for (let c = 1; c <= maxAllowed; c++) {
-        validMoves.push({ row: r, count: c });
-      }
+      for (let c = 1; c <= maxAllowed; c++) validMoves.push({ row: r, count: c });
     }
-    if (validMoves.length === 0) return null;
-
     let bestMove = null;
+
     if (gameMode === 'misere') {
       let rowsWithMoreThanOne = activeRows.filter(r => gameState[r] > 1);
       if (rowsWithMoreThanOne.length === 0) {
         bestMove = { row: activeRows[0], count: 1 };
       } else if (rowsWithMoreThanOne.length === 1) {
-        let tr = rowsWithMoreThanOne[0];
-        let leave = ((activeRows.length - 1) % 2 !== 0) ? 1 : 0;
-        let remove = gameState[tr] - leave;
-        bestMove = { row: tr, count: remove <= 0 ? 1 : remove };
+        let targetRow = rowsWithMoreThanOne[0];
+        let oddCount = (activeRows.length - 1) % 2 !== 0;
+        let remove = gameState[targetRow] - (oddCount ? 1 : 0);
+        bestMove = { row: targetRow, count: remove <= 0 ? 1 : remove };
       } else {
         let xorSum = 0;
         for (let i = 0; i < 10; i++) xorSum ^= gameState[i];
@@ -735,9 +600,9 @@
           }
         }
       }
-    } else {
+    } else { 
       for (let move of validMoves) {
-        if (gameState[move.row] - move.count === 0 && activeRows.length === 1) {
+        if (gameState[move.row] - move.count === 0 && validMoves.length === 1) {
           bestMove = move; break;
         }
       }
@@ -746,102 +611,42 @@
     if (difficulty === 'easy' && Math.random() < 0.7) bestMove = null;
     if (difficulty === 'medium' && Math.random() < 0.35) bestMove = null;
     if (!bestMove || !validMoves.some(m => m.row === bestMove.row && m.count === bestMove.count)) {
-      bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+      if (validMoves.length > 0) bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
     }
     return bestMove;
   }
 
-  function checkGameOverLocal() {
-    let totalLeft = gameState.reduce((a, b) => a + b, 0);
-    if (gameMode === 'misere') {
-      if (totalLeft === 1) {
-        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! La IA se quedó con la última ramita." : "💀 Perdiste. Te quedó la última ramita.");
-        document.getElementById('confirm-btn').disabled = true;
-        isPlayerTurn = false;
-        return true;
-      } else if (totalLeft === 0) {
-        updateStatus(isPlayerTurn ? "💀 Perdiste. Tomaste la última ramita." : "🎉 ¡Ganaste! La IA tomó la última ramita.");
-        document.getElementById('confirm-btn').disabled = true;
-        isPlayerTurn = false;
-        return true;
-      }
-    } else {
-      if (totalLeft === 0) {
-        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! Has tomado la última ramita." : "💀 Perdiste. La IA tomó la última ramita.");
-        document.getElementById('confirm-btn').disabled = true;
-        isPlayerTurn = false;
-        return true;
-      }
-    }
-    return false;
-  }
+  // --- UTILIDADES ---
+  function updateStatus(msg) { document.getElementById('status').innerHTML = msg; }
+  function changeDifficulty(val) { difficulty = val; }
+  function changeGameMode(val) { gameMode = val; if(!isMultiplayer || isHost) initBoard(); }
+  function resetGame() { initBoard(); }
 
-  function updateStatus(msg) {
-    const statusElem = document.getElementById('status');
-    if (statusElem) statusElem.innerHTML = msg;
-  }
-
-  window.resetGame = async () => {
-    if (playMode === 'local') {
-      initBoardLocal();
-    } else {
-      if (playerId === 1) {
-        let newGameState = [];
-        for (let r = 1; r <= 10; r++) newGameState.push(r);
-        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomId);
-        await updateDoc(roomRef, {
-            gameState: newGameState,
-            lastMoveCount: 0,
-            turn: Math.random() < 0.5 ? 1 : 2,
-            status: 'playing',
-            winner: null,
-            gameMode: document.getElementById('game-mode').value
-        });
-      }
-    }
-  };
-
-  window.changeDifficulty = (val) => { difficulty = val; };
-
-  window.changeGameMode = (val) => {
-    gameMode = val;
-    if (playMode === 'local') initBoardLocal();
-    else if (playerId === 1) window.resetGame();
-  };
-
-  window.toggleMusic = async () => {
-    const btn = document.getElementById('music-btn');
-    if (typeof Tone === 'undefined') {
-      if (btn) btn.innerHTML = "🚫 NO AUDIO";
-      return;
-    }
+  async function toggleMusic() {
     try {
+      const btn = document.getElementById('music-btn');
       if (!musicPlaying) {
         await Tone.start();
         const reverb = new Tone.Reverb({ decay: 4, wet: 0.5 }).toDestination();
         synth = new Tone.PluckSynth({ attackNoise: 1.5, dampening: 4000, resonance: 0.9 }).connect(reverb);
         const scale = ["C4", "D4", "F4", "G4", "A4", "C5", "D5"];
+        
         loop = new Tone.Loop(time => {
-          if (Math.random() > 0.2) {
-            let note = scale[Math.floor(Math.random() * scale.length)];
-            synth.triggerAttack(note, time);
-          }
+          if (Math.random() > 0.2) synth.triggerAttack(scale[Math.floor(Math.random() * scale.length)], time);
         }, "8n").start(0);
+
         Tone.Transport.bpm.value = 75;
         Tone.Transport.start();
         musicPlaying = true;
-        if (btn) btn.innerHTML = "🎵 ON";
+        btn.innerHTML = "🎵 ON";
       } else {
         Tone.Transport.stop();
         if (loop) loop.dispose();
         musicPlaying = false;
-        if (btn) btn.innerHTML = "🎵 OFF";
+        btn.innerHTML = "🎵 OFF";
       }
-    } catch (e) {
-      console.warn("Audio error:", e);
-      if (btn) btn.innerHTML = "🎵 OFF";
-    }
-  };
+    } catch (e) { console.warn("Música falló.", e); }
+  }
 </script>
 </body>
 </html>
