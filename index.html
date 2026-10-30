@@ -223,8 +223,8 @@
       <button id="music-btn" class="btn-sub" onclick="toggleMusic()">🎵 OFF</button>
     </div>
     
-    <!-- Botón para salir del multijugador -->
-    <button id="btn-leave" class="btn-sub" style="display: none; background-color: #e57373; color: white; margin-top: 5px;" onclick="leaveOnline()">❌ Salir de la sala</button>
+    <!-- Botón para volver al menú -->
+    <button id="btn-leave" class="btn-main" style="background-color: #e57373; color: white; margin-top: 5px; font-size: 0.9rem;" onclick="returnToMenu()">⬅️ Volver al Menú</button>
   </div>
 </div>
 
@@ -233,6 +233,7 @@
   let selectedRow = -1;
   let selectedIndices = [];
   let isPlayerTurn = true;
+  let aiTimeout = null;
   
   // Opciones
   let difficulty = 'hard';
@@ -375,7 +376,7 @@
 
   function configureOnlineUI() {
     document.getElementById('difficulty').style.display = 'none'; // IA no aplica
-    document.getElementById('btn-leave').style.display = 'block';
+    document.getElementById('btn-leave').innerHTML = "❌ Salir de la sala";
     
     // Solo el anfitrión puede reiniciar o cambiar modo
     if (!isHost) {
@@ -387,10 +388,18 @@
     }
   }
 
-  function leaveOnline() {
-    if (conn) conn.close();
-    if (peer) peer.destroy();
-    isMultiplayer = false;
+  function returnToMenu() {
+    // Si la IA estaba pensando, cancelar
+    if (aiTimeout) clearTimeout(aiTimeout);
+    
+    // Cerrar conexiones si estaba en multijugador
+    if (isMultiplayer) {
+      if (conn) { conn.close(); conn = null; }
+      if (peer) { peer.destroy(); peer = null; }
+      isMultiplayer = false;
+      isHost = false;
+    }
+    
     showLobbyScreen();
   }
 
@@ -398,7 +407,7 @@
   function startLocal() {
     isMultiplayer = false;
     document.getElementById('difficulty').style.display = 'flex';
-    document.getElementById('btn-leave').style.display = 'none';
+    document.getElementById('btn-leave').innerHTML = "⬅️ Volver al Menú";
     document.getElementById('btn-restart').style.display = 'flex';
     document.getElementById('game-mode').disabled = false;
     initBoard();
@@ -410,6 +419,7 @@
     selectedRow = -1;
     selectedIndices = [];
     lastMoveCount = 0;
+    if (aiTimeout) clearTimeout(aiTimeout);
 
     if (isMultiplayer) {
       configureOnlineUI();
@@ -438,7 +448,7 @@
       } else {
         document.getElementById('confirm-btn').disabled = true;
         updateStatus("🎲 Empieza la IA. Pensando...");
-        setTimeout(aiTurn, 1000);
+        aiTimeout = setTimeout(aiTurn, 1000);
       }
     }
   }
@@ -524,7 +534,7 @@
     } else {
       if (!checkGameOver()) {
         updateStatus("Pensando jugada la IA...");
-        setTimeout(aiTurn, 700);
+        aiTimeout = setTimeout(aiTurn, 700);
       }
     }
   }
