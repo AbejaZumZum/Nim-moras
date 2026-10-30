@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Nim: Ramitas de Mora</title>
+  <!-- Optional Tone.js for music; game runs 100% fail-safe with or without it -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
   <style>
     * {
@@ -51,14 +52,18 @@
       text-align: center;
       color: #5d4037;
       margin-bottom: 8px;
-      line-height: 1.2;
+      line-height: 1.25;
+      background: rgba(255, 255, 255, 0.4);
+      padding: 6px 10px;
+      border-radius: 8px;
+      width: 100%;
     }
 
     .status-msg {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: bold;
       color: #2e7d32;
-      min-height: 1.4em;
+      min-height: 1.5em;
       margin-bottom: 8px;
       text-align: center;
     }
@@ -91,6 +96,10 @@
       transition: transform 0.15s ease, filter 0.2s ease;
     }
 
+    .twig:hover:not(.taken) {
+      transform: scale(1.15);
+    }
+
     .twig svg {
       width: 100%;
       height: 100%;
@@ -105,7 +114,7 @@
     /* Estado tachado/apagado */
     .twig.taken {
       cursor: default;
-      opacity: 0.25;
+      opacity: 0.22;
       filter: grayscale(100%) brightness(40%);
     }
 
@@ -133,10 +142,10 @@
       border-radius: 10px;
       cursor: pointer;
       box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.1s;
     }
 
-    .btn-main:active {
+    .btn-main:active:not(:disabled) {
       background-color: #8d6e63;
       transform: translateY(1px);
     }
@@ -148,18 +157,18 @@
       box-shadow: none;
     }
 
-    /* Fila de controles secundarios (3 en línea) */
+    /* Fila de controles secundarios */
     .sub-controls {
       display: grid;
-      grid-template-columns: 1fr 1.2fr 1fr;
-      gap: 6px;
+      grid-template-columns: 1fr 1.1fr 1.1fr 0.8fr;
+      gap: 4px;
       width: 100%;
     }
 
     .btn-sub, .select-sub {
       width: 100%;
-      padding: 8px 4px;
-      font-size: 0.75rem;
+      padding: 8px 2px;
+      font-size: 0.72rem;
       font-family: inherit;
       font-weight: bold;
       background-color: #f5f0eb;
@@ -176,10 +185,10 @@
     .select-sub {
       appearance: none;
       -webkit-appearance: none;
-      background-image: url('data:image/svg+xml;utf8,<svg fill="%234e342e" height="12" viewBox="0 0 24 24" width="12" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+      background-image: url('data:image/svg+xml;utf8,<svg fill="%234e342e" height="10" viewBox="0 0 24 24" width="10" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
       background-repeat: no-repeat;
-      background-position: right 4px center;
-      padding-right: 14px;
+      background-position: right 2px center;
+      padding-right: 12px;
     }
 
     .btn-sub:active, .select-sub:active {
@@ -191,12 +200,11 @@
 
 <div class="game-container">
   <h1>Nim: Ramitas de Mora</h1>
-  <div class="rules">
-    Tacha cualquier cantidad de ramitas en un solo renglón por turno.<br>
-    ¡Quien se quede con la última ramita <strong>pierde</strong>!
+  <div id="rules-desc" class="rules">
+    <!-- Carga dinámica según el modo -->
   </div>
 
-  <div id="status" class="status-msg">Tu turno. Elige ramas a tachar.</div>
+  <div id="status" class="status-msg">Sorteando quién empieza...</div>
 
   <div id="pyramid" class="pyramid"></div>
 
@@ -205,7 +213,12 @@
     
     <div class="sub-controls">
       <button class="btn-sub" onclick="resetGame()">🔄 Reiniciar</button>
-      
+
+      <select id="game-mode" class="select-sub" onchange="changeGameMode(this.value)">
+        <option value="misere" selected>🎭 Misère</option>
+        <option value="fibonacci">🌀 Fibonacci</option>
+      </select>
+
       <select id="difficulty" class="select-sub" onchange="changeDifficulty(this.value)">
         <option value="easy">🌱 Aprendiz</option>
         <option value="medium">🌿 Sabio</option>
@@ -218,15 +231,18 @@
 </div>
 
 <script>
+  // Variables globales de estado
   let gameState = [];
   let selectedRow = -1;
   let selectedIndices = [];
   let isPlayerTurn = true;
   let difficulty = 'hard';
+  let gameMode = 'misere';
+  let lastMoveCount = 0; // Para el límite del modo Fibonacci
   let musicPlaying = false;
-  let synth, loop;
+  let synth = null, loop = null;
 
-  // SVG con DOS MORAS y ramita leñosa corregida
+  // SVG con DOS MORAS y ramita leñosa exacta
   function createTwigSVG() {
     return `
       <svg viewBox="0 0 30 50" xmlns="http://www.w3.org/2000/svg">
@@ -271,6 +287,23 @@
     `;
   }
 
+  function updateRulesText() {
+    const rulesElem = document.getElementById('rules-desc');
+    if (!rulesElem) return;
+
+    if (gameMode === 'misere') {
+      rulesElem.innerHTML = `
+        <strong>Modo Misère:</strong> Tacha cualquier cantidad de ramas en un solo renglón.<br>
+        ¡Quien tome la última ramita <strong>pierde</strong>!
+      `;
+    } else {
+      rulesElem.innerHTML = `
+        <strong>Modo Fibonacci:</strong> Tomas en un renglón hasta 2× las ramas de la jugada anterior.<br>
+        (En la 1.ª jugada no puedes tomar la fila completa). ¡Quien tome la última <strong>gana</strong>!
+      `;
+    }
+  }
+
   function initBoard() {
     gameState = [];
     for (let r = 1; r <= 10; r++) {
@@ -278,14 +311,44 @@
     }
     selectedRow = -1;
     selectedIndices = [];
-    isPlayerTurn = true;
-    document.getElementById('confirm-btn').disabled = false;
-    updateStatus("Tu turno. Elige ramas a tachar.");
+    lastMoveCount = 0;
+
+    // Sorteo aleatorio de turno inicial
+    isPlayerTurn = Math.random() < 0.5;
+
     renderPyramid();
+    updateRulesText();
+
+    const confirmBtn = document.getElementById('confirm-btn');
+
+    if (isPlayerTurn) {
+      if (confirmBtn) confirmBtn.disabled = false;
+      updateStatus("🎲 ¡Sorteo realizado! Inicias tú la partida.");
+    } else {
+      if (confirmBtn) confirmBtn.disabled = true;
+      updateStatus("🎲 ¡Sorteo realizado! La IA realiza el primer movimiento...");
+      setTimeout(aiTurn, 900);
+    }
+  }
+
+  function getMaxAllowedForMove(r) {
+    if (gameMode === 'misere') {
+      return gameState[r];
+    } else { // Fibonacci Nim rules
+      if (lastMoveCount === 0) {
+        // En el primer movimiento de la partida no se puede quitar toda la fila si tiene >1
+        return Math.max(1, gameState[r] - 1);
+      } else {
+        // Máximo el doble de la cantidad tomada en la jugada anterior
+        return Math.min(gameState[r], 2 * lastMoveCount);
+      }
+    }
   }
 
   function renderPyramid() {
     const container = document.getElementById('pyramid');
+    if (!container) return;
+
     container.innerHTML = '';
 
     for (let r = 0; r < 10; r++) {
@@ -317,16 +380,25 @@
   function handleTwigClick(r, c) {
     if (!isPlayerTurn) return;
 
+    // Cambió de fila -> resetea selección previa
     if (selectedRow !== -1 && selectedRow !== r) {
       selectedIndices = [];
     }
 
     selectedRow = r;
     const indexPos = selectedIndices.indexOf(c);
+
     if (indexPos > -1) {
+      // Deseleccionar
       selectedIndices.splice(indexPos, 1);
       if (selectedIndices.length === 0) selectedRow = -1;
     } else {
+      // Seleccionar
+      let maxAllowed = getMaxAllowedForMove(r);
+      if (selectedIndices.length + 1 > maxAllowed) {
+        updateStatus(`⚠️ Modo ${gameMode === 'fibonacci' ? 'Fibonacci' : 'Misère'}: máximo ${maxAllowed} ramita(s) en esta jugada.`);
+        return;
+      }
       selectedIndices.push(c);
     }
 
@@ -336,6 +408,7 @@
   function confirmMove() {
     if (!isPlayerTurn || selectedIndices.length === 0) return;
 
+    lastMoveCount = selectedIndices.length;
     gameState[selectedRow] -= selectedIndices.length;
     selectedRow = -1;
     selectedIndices = [];
@@ -345,21 +418,26 @@
     if (checkGameOver()) return;
 
     isPlayerTurn = false;
-    document.getElementById('confirm-btn').disabled = true;
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = true;
     updateStatus("Pensando jugada la IA...");
-    setTimeout(aiTurn, 700);
+    setTimeout(aiTurn, 650);
   }
 
   function aiTurn() {
     let move = getAIMove();
-    gameState[move.row] -= move.count;
+    if (move) {
+      lastMoveCount = move.count;
+      gameState[move.row] -= move.count;
+    }
 
     renderPyramid();
 
     if (checkGameOver()) return;
 
     isPlayerTurn = true;
-    document.getElementById('confirm-btn').disabled = false;
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = false;
     updateStatus("Tu turno. Elige ramas a tachar.");
   }
 
@@ -369,41 +447,63 @@
       if (gameState[i] > 0) activeRows.push(i);
     }
 
-    let rowsWithMoreThanOne = activeRows.filter(r => gameState[r] > 1);
+    if (activeRows.length === 0) return null;
+
+    let validMoves = [];
+    for (let r of activeRows) {
+      let maxAllowed = getMaxAllowedForMove(r);
+      for (let c = 1; c <= maxAllowed; c++) {
+        validMoves.push({ row: r, count: c });
+      }
+    }
+
+    if (validMoves.length === 0) return null;
+
     let bestMove = null;
 
-    if (rowsWithMoreThanOne.length === 0) {
-      let r = activeRows[0];
-      bestMove = { row: r, count: 1 };
-    } else if (rowsWithMoreThanOne.length === 1) {
-      let targetRow = rowsWithMoreThanOne[0];
-      let oddCount = (activeRows.length - 1) % 2 !== 0;
-      let leave = oddCount ? 1 : 0;
-      let remove = gameState[targetRow] - leave;
-      if (remove <= 0) remove = 1;
-      bestMove = { row: targetRow, count: remove };
-    } else {
-      let xorSum = 0;
-      for (let i = 0; i < 10; i++) xorSum ^= gameState[i];
+    if (gameMode === 'misere') {
+      let rowsWithMoreThanOne = activeRows.filter(r => gameState[r] > 1);
+      if (rowsWithMoreThanOne.length === 0) {
+        let r = activeRows[0];
+        bestMove = { row: r, count: 1 };
+      } else if (rowsWithMoreThanOne.length === 1) {
+        let targetRow = rowsWithMoreThanOne[0];
+        let oddCount = (activeRows.length - 1) % 2 !== 0;
+        let leave = oddCount ? 1 : 0;
+        let remove = gameState[targetRow] - leave;
+        if (remove <= 0) remove = 1;
+        bestMove = { row: targetRow, count: remove };
+      } else {
+        let xorSum = 0;
+        for (let i = 0; i < 10; i++) xorSum ^= gameState[i];
 
-      if (xorSum !== 0) {
-        for (let i = 0; i < 10; i++) {
-          let target = gameState[i] ^ xorSum;
-          if (target < gameState[i]) {
-            bestMove = { row: i, count: gameState[i] - target };
-            break;
+        if (xorSum !== 0) {
+          for (let i = 0; i < 10; i++) {
+            let target = gameState[i] ^ xorSum;
+            if (target < gameState[i]) {
+              bestMove = { row: i, count: gameState[i] - target };
+              break;
+            }
           }
+        }
+      }
+    } else { // Estrategia Fibonacci
+      // Si con un movimiento válido se deja el tablero vacío, gana de inmediato
+      for (let move of validMoves) {
+        if (gameState[move.row] - move.count === 0 && activeRows.length === 1) {
+          bestMove = move;
+          break;
         }
       }
     }
 
+    // Imperfecciones por nivel de dificultad
     if (difficulty === 'easy' && Math.random() < 0.7) bestMove = null;
     if (difficulty === 'medium' && Math.random() < 0.35) bestMove = null;
 
-    if (!bestMove) {
-      let r = activeRows[Math.floor(Math.random() * activeRows.length)];
-      let count = Math.floor(Math.random() * gameState[r]) + 1;
-      bestMove = { row: r, count: count };
+    // Fallback si no hay estrategia calculada o si la sugerida excede límites válidos
+    if (!bestMove || !validMoves.some(m => m.row === bestMove.row && m.count === bestMove.count)) {
+      bestMove = validMoves[Math.floor(Math.random() * validMoves.length)];
     }
 
     return bestMove;
@@ -412,28 +512,35 @@
   function checkGameOver() {
     let totalLeft = gameState.reduce((a, b) => a + b, 0);
 
-    if (totalLeft === 1) {
-      if (isPlayerTurn) {
-        updateStatus("🎉 ¡Ganaste! La IA se quedó con la última ramita.");
-      } else {
-        updateStatus("💀 Perdiste. Te quedó la última ramita.");
+    if (gameMode === 'misere') {
+      if (totalLeft === 1) {
+        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! La IA se quedó con la última ramita." : "💀 Perdiste. Te quedó la última ramita.");
+        disableGame();
+        return true;
+      } else if (totalLeft === 0) {
+        updateStatus(isPlayerTurn ? "💀 Perdiste. Tomaste la última ramita." : "🎉 ¡Ganaste! La IA tomó la última ramita.");
+        disableGame();
+        return true;
       }
-      document.getElementById('confirm-btn').disabled = true;
-      return true;
-    } else if (totalLeft === 0) {
-      if (isPlayerTurn) {
-        updateStatus("💀 Perdiste. Tomaste la última ramita.");
-      } else {
-        updateStatus("🎉 ¡Ganaste! La IA tomó la última ramita.");
+    } else { // Modo Fibonacci (Gana quien toma la última)
+      if (totalLeft === 0) {
+        updateStatus(isPlayerTurn ? "🎉 ¡Ganaste! Has tomado la última ramita." : "💀 Perdiste. La IA tomó la última ramita.");
+        disableGame();
+        return true;
       }
-      document.getElementById('confirm-btn').disabled = true;
-      return true;
     }
     return false;
   }
 
+  function disableGame() {
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) confirmBtn.disabled = true;
+    isPlayerTurn = false;
+  }
+
   function updateStatus(msg) {
-    document.getElementById('status').innerHTML = msg;
+    const statusElem = document.getElementById('status');
+    if (statusElem) statusElem.innerHTML = msg;
   }
 
   function resetGame() {
@@ -444,41 +551,63 @@
     difficulty = val;
   }
 
+  function changeGameMode(val) {
+    gameMode = val;
+    initBoard();
+  }
+
   async function toggleMusic() {
     const btn = document.getElementById('music-btn');
-    if (!musicPlaying) {
-      await Tone.start();
-      
-      const reverb = new Tone.Reverb({ decay: 4, wet: 0.5 }).toDestination();
-      synth = new Tone.PluckSynth({
-        attackNoise: 1.5,
-        dampening: 4000,
-        resonance: 0.9
-      }).connect(reverb);
+    if (typeof Tone === 'undefined') {
+      if (btn) btn.innerHTML = "🚫 NO AUDIO";
+      return;
+    }
 
-      const scale = ["C4", "D4", "F4", "G4", "A4", "C5", "D5"];
-      
-      loop = new Tone.Loop(time => {
-        if (Math.random() > 0.2) {
-          let note = scale[Math.floor(Math.random() * scale.length)];
-          synth.triggerAttack(note, time);
-        }
-      }, "8n").start(0);
+    try {
+      if (!musicPlaying) {
+        await Tone.start();
+        
+        const reverb = new Tone.Reverb({ decay: 4, wet: 0.5 }).toDestination();
+        synth = new Tone.PluckSynth({
+          attackNoise: 1.5,
+          dampening: 4000,
+          resonance: 0.9
+        }).connect(reverb);
 
-      Tone.Transport.bpm.value = 75;
-      Tone.Transport.start();
+        const scale = ["C4", "D4", "F4", "G4", "A4", "C5", "D5"];
+        
+        loop = new Tone.Loop(time => {
+          if (Math.random() > 0.2) {
+            let note = scale[Math.floor(Math.random() * scale.length)];
+            synth.triggerAttack(note, time);
+          }
+        }, "8n").start(0);
 
-      musicPlaying = true;
-      btn.innerHTML = "🎵 ON";
-    } else {
-      Tone.Transport.stop();
-      if (loop) loop.dispose();
-      musicPlaying = false;
-      btn.innerHTML = "🎵 OFF";
+        Tone.Transport.bpm.value = 75;
+        Tone.Transport.start();
+
+        musicPlaying = true;
+        if (btn) btn.innerHTML = "🎵 ON";
+      } else {
+        Tone.Transport.stop();
+        if (loop) loop.dispose();
+        musicPlaying = false;
+        if (btn) btn.innerHTML = "🎵 OFF";
+      }
+    } catch (e) {
+      console.warn("Audio no disponible en este dispositivo/entorno:", e);
+      if (btn) btn.innerHTML = "🎵 OFF";
     }
   }
 
-  initBoard();
+  // Inicio a prueba de fallos: arranca inmediatamente al evaluar el script
+  (function bootGame() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initBoard);
+    } else {
+      initBoard();
+    }
+  })();
 </script>
 </body>
 </html>
